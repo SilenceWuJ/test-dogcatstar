@@ -1,0 +1,48 @@
+# Python 缓存
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 虚拟环境
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# 测试报告与临时文件
+allure-results/
+allure-report/
+report.html
+*.log
+*.xml
+*.json
+!auth_*.json   # 如果需要保留认证文件，可取消注释
+
+
+# 配置文件（可能包含敏感信息）
+.env
+*.env
+
+
+# IDE 配置
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# 操作系统
+.DS_Store
+Thumbs.db
+
+# 其他
+*.db
+*.sqlite3
+dist/
+build/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
