@@ -43,7 +43,6 @@ class LoginPage(BasePage):
     def wait_for_login_modal(self, timeout=10000):
         """等待选择弹窗出现"""
         try:
-
             # 定义可能出现的弹窗特征 - 更精确的选择器
             modal_indicators = [
                 # 英文标题
@@ -51,7 +50,6 @@ class LoginPage(BasePage):
                 # 繁体中文标题
                 "h5:has-text('請輸入您的手機號碼')",
             ]
-
             # 等待任何一个特征出现
             start_time = time.time()
             while (time.time() - start_time) * 1000 < timeout:
@@ -59,7 +57,6 @@ class LoginPage(BasePage):
                     try:
                         # 尝试定位元素
                         element = self.page.locator(indicator).first
-
                         # 检查元素是否存在且可见
                         if element.count() > 0:
                             # 检查元素是否可见
@@ -69,7 +66,6 @@ class LoginPage(BasePage):
                                     text_content = element.text_content()
                                 except:
                                     pass
-
                                 # 获取弹窗内容
                                 modal_content = self.get_modal_content()
 

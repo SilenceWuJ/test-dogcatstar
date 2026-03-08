@@ -22,6 +22,8 @@ class ProductDetailPage(BasePage):
     def __init__(self, page: Page):
         super().__init__(page)
         self.selectors = self.config["PRODUCT_DETAIL"]
+        # # 跨域-new page,在初始化时等待标题出现，确保页面已加载
+        # self.wait_for_element(self.selectors["PRODUCT_TITLE"],timeout=10000)
 
     # -------------------- 页面加载与基本信息 --------------------
     def wait_for_product_detail_load(self):

@@ -14,6 +14,8 @@ from pathlib import Path
 
 from playwright.sync_api import Page
 from utils.log import logger
+from typing import Optional, Callable, Type
+
 
 
 class BasePage:
@@ -169,5 +171,85 @@ class BasePage:
             if locator.count() > 0 and locator.first.is_visible():
                 locator.first.click()
                 self.page.wait_for_timeout(300)
+
+
+    # ---------- 跨域-新增方法 ----------
+    def click_and_handle_navigation(self, selector: str, timeout: float = 30000) -> Page:
+        """
+        点击元素并处理可能的页面跳转（新标签页或重定向）
+        返回最终的页面对象（可能是原页或新页）
+        """
+        with self.page.context.expect_page() as new_page_info:
+            self.page.click(selector, timeout=timeout)
+
+        try:
+            # 如果打开了新页面，等待其加载并返回新页面对象
+            new_page = new_page_info.value
+            new_page.wait_for_load_state("networkidle")
+            return new_page
+        except Exception:
+            # 未打开新页面，则等待当前页面导航完成（可能是重定向）
+            self.page.wait_for_load_state("networkidle")
+            return self.page
+
+    def is_login_page(self) -> bool:
+        """判断当前页面是否为登录页（根据页面特征）"""
+        login_indicators = [
+            "text=密码登录",
+            "text=手机登录",
+            "input[type='password']",
+            "text=登錄",
+            "text=Sign in",
+            "text=請輸入您的手機號碼",  # 你文档中的登录弹窗
+            "text=登入/註冊",           # 登录按钮
+        ]
+        for indicator in login_indicators:
+            if self.page.locator(indicator).count() > 0:
+                return True
+        return False
+
+    def handle_login_if_needed(self, login_func: Optional[Callable[[Page], None]] = None) -> bool:
+        """
+        如果当前页面是登录页，则执行登录操作，并等待跳转回原页
+        :param login_func: 登录函数，接收一个 Page 对象，执行登录操作
+        :return: 是否执行了登录
+        """
+        if not self.is_login_page():
+            return False
+
+        print("检测到登录页，正在执行登录...")
+        if login_func is None:
+            # 如果没有传入登录函数，则尝试使用默认的 perform_login（从环境变量读取）
+            method = os.getenv("LOGIN_METHOD", "google")
+            if method == "google":
+                credentials = {
+                    'email': os.getenv("GOOGLE_EMAIL"),
+                    'password': os.getenv("GOOGLE_PASSWORD")
+                }
+            elif method == "facebook":
+                credentials = {
+                    'username': os.getenv("FB_USERNAME"),
+                    'password': os.getenv("FB_PASSWORD")
+                }
+            else:
+                raise ValueError(f"不支持的登录方式: {method}")
+            from utils.login_helpers import perform_login
+            perform_login(self.page, method=method, credentials=credentials)
+        else:
+            login_func(self.page)
+
+        # 等待登录后页面跳转
+        self.page.wait_for_load_state("networkidle")
+        self.page.wait_for_timeout(2000)  # 额外等待确保 Cookie 生效
+        return True
+
+    def create_page_object(self, page_obj_class: Type['BasePage'], page: Optional[Page] = None) -> 'BasePage':
+        """
+        根据给定的页面类创建新的页面对象实例
+        :param page_obj_class: 需要实例化的页面类（如 ProductDetailPage）
+        :param page: 使用的 Page 对象，默认为当前 page
+        """
+        target_page = page or self.page
+        return page_obj_class(target_page)
 
 

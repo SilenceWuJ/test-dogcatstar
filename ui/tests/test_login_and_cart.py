@@ -67,8 +67,6 @@ class TestLoginAndCartEvent:
 
         with allure.step("导航到猫咪主食url"):
 
-
-
             logined_base_page.navigate(url="https://www.dogcatstar.com/product-category/cat/cat_food/")
 
 

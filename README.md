@@ -44,6 +44,13 @@ pytest  -m "ui or api" -n auto --dist loadscope -v --alluredir=./allure-results
 #启动allure服务 查看报告
 allure serve ./allure-results
 
+bash
+# 使用默认文件名（auth.json 或 auth_{LOGIN_METHOD}.json）
+pytest tests/
+
+# 指定自定义文件
+pytest --storage-state=my_auth.json tests/
+
 
 
 项目结构

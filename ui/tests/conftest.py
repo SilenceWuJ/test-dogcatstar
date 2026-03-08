@@ -8,6 +8,7 @@ Author  : xixi
 File    :
 #-------------------------------------------------------------
 """
+import datetime
 
 from playwright.sync_api import Page
 import pytest
@@ -139,6 +140,28 @@ def context(browser, request):
     if init_script:
         context.add_init_script(init_script)
 
+        # ----- 新增：为上下文中所有新页面自动添加弹窗处理器 -----
+        def add_handlers(page):
+            # 优惠弹窗关闭
+            coupon_close = page.locator(
+                'button:has-text("×"), button:has-text("关闭"), .close-btn, [aria-label="Close"]')
+            page.add_locator_handler(coupon_close, lambda: coupon_close.click())
+            # 订阅弹窗
+            subscribe_close = page.locator('button:has-text("稍后"), button:has-text("不再提示"), .subscribe-close')
+            page.add_locator_handler(subscribe_close, lambda: subscribe_close.click())
+            # 模态背景
+            modal_backdrop = page.locator('.modal-backdrop, .overlay')
+            page.add_locator_handler(modal_backdrop, lambda: modal_backdrop.click())
+            # 今日不再显示
+            today_not_show = page.locator('p:has-text("今日不再顯示")')
+            page.add_locator_handler(today_not_show, lambda: today_not_show.click())
+
+        context.on("page", add_handlers)
+        # ------------------------------------------------
+
+        # yield context
+        # context.close()
+
     yield context
     context.close()
 
@@ -243,9 +266,99 @@ LOGIN_METHOD = os.getenv("LOGIN_METHOD", "google")
 AUTH_FILE = f"auth_{LOGIN_METHOD}.json"
 
 
+# @pytest.fixture(scope="function")
+# def logged_in_page(browser: Browser, request):
+#
+#     # 获取 --storage-state 选项的值（如果有）
+#     storage_state_path = request.config.getoption("--storage-state")
+#     if storage_state_path is None:
+#         # 如果没有通过命令行指定，则使用默认的动态文件名
+#         storage_state_path = f"auth_{LOGIN_METHOD}.json"
+#
+#     # 处理存储预设
+#     storage_preset = getattr(request, 'param', {})
+#     ls_preset = storage_preset.get('localStorage', {})
+#     ss_preset = storage_preset.get('sessionStorage', {})
+#
+#     # 构建初始化脚本
+#     script_lines = []
+#     for key, value in ls_preset.items():
+#         if isinstance(value, (dict, list)):
+#             value = json.dumps(value, ensure_ascii=False)
+#         script_lines.append(f"localStorage.setItem('{key}', '{value}');")
+#     for key, value in ss_preset.items():
+#         if isinstance(value, (dict, list)):
+#             value = json.dumps(value, ensure_ascii=False)
+#         script_lines.append(f"sessionStorage.setItem('{key}', '{value}');")
+#
+#
+#     init_script = "\n".join(script_lines) if script_lines else None
+#
+#     # # 根据登录状态文件是否存在决定context创建方式
+#     # if os.path.exists(AUTH_FILE):
+#     #     context = browser.new_context(
+#     #         storage_state=AUTH_FILE,
+#     #         viewport={'width': 1366, 'height': 768}
+#     #     )
+#     # else:
+#     #     context = browser.new_context(viewport={'width': 1366, 'height': 768})
+#     #     # 先添加存储注入脚本（登录前可能需要）
+#     #     if init_script:
+#     #         context.add_init_script(init_script)
+#     # ... 构建 init_script ...
+#
+#     # 如果指定的认证文件存在，直接加载
+#     if os.path.exists(storage_state_path):
+#         context = browser.new_context(
+#             storage_state=storage_state_path,
+#             viewport={'width': 1366, 'height': 768}
+#         )
+#     else:
+#         context = browser.new_context(viewport={'width': 1366, 'height': 768})
+#         if init_script:
+#             context.add_init_script(init_script)
+#
+#         # 创建页面并执行登录
+#         page = context.new_page()
+#         page.goto("https://www.dogcatstar.com")
+#         if LOGIN_METHOD == "google":
+#             credentials = {
+#                 'email': os.getenv("GOOGLE_EMAIL"),
+#                 'password': os.getenv("GOOGLE_PASSWORD")
+#             }
+#         elif LOGIN_METHOD == "facebook":
+#             credentials = {
+#                 'username': os.getenv("FB_USERNAME"),
+#                 'password': os.getenv("FB_PASSWORD")
+#             }
+#         else:
+#             raise ValueError(f"不支持的登录方式: {LOGIN_METHOD}")
+#         perform_login(page, method=LOGIN_METHOD, credentials=credentials)
+#
+#         # 等待登录成功（可根据实际情况调整等待条件）
+#         page.wait_for_url("**www.dogcatstar.com**", timeout=15000)
+#         print("登录成功，写入auth.file")
+#         context.storage_state(path=AUTH_FILE)
+#
+#     # 如果登录状态下也需要添加存储脚本（且之前未添加），则添加
+#     if os.path.exists(AUTH_FILE) and init_script:
+#         context.add_init_script(init_script)
+#
+#     # 从最终使用的context创建新页面并返回
+#     page = context.new_page()
+#     yield page
+#     context.close()
+
 @pytest.fixture(scope="function")
 def logged_in_page(browser: Browser, request):
-    # 处理存储预设
+    # 获取 --storage-state 选项的值（如果没有指定，则使用默认的动态文件名）
+    storage_state_path = request.config.getoption("--storage-state")
+    if storage_state_path is None:
+        # 从环境变量获取登录方法，构建默认文件名
+        login_method = os.getenv("LOGIN_METHOD", "google")
+        storage_state_path = f"auth_{login_method}.json"
+
+    # 处理存储预设（用于初始化 localStorage/sessionStorage）
     storage_preset = getattr(request, 'param', {})
     ls_preset = storage_preset.get('localStorage', {})
     ss_preset = storage_preset.get('sessionStorage', {})
@@ -262,132 +375,57 @@ def logged_in_page(browser: Browser, request):
         script_lines.append(f"sessionStorage.setItem('{key}', '{value}');")
     init_script = "\n".join(script_lines) if script_lines else None
 
-    # 根据登录状态文件是否存在决定context创建方式
-    if os.path.exists(AUTH_FILE):
-        print("auth_file存在，加载登录状态")
+    # 根据认证文件是否存在创建 context
+    if os.path.exists(storage_state_path):
+        # 文件存在：加载认证状态
         context = browser.new_context(
-            storage_state=AUTH_FILE,
+            storage_state=storage_state_path,
             viewport={'width': 1366, 'height': 768}
         )
     else:
-        print("无登录状态，需要执行登录")
+        # 文件不存在：创建空白 context
         context = browser.new_context(viewport={'width': 1366, 'height': 768})
-        # 先添加存储注入脚本（登录前可能需要）
-        if init_script:
-            context.add_init_script(init_script)
 
-        # 创建页面并执行登录
+    # **无论是否加载了认证文件，都需要添加初始化脚本（如果存在）**
+    if init_script:
+        context.add_init_script(init_script)
+
+    # 如果认证文件不存在，则执行登录并保存
+    if not os.path.exists(storage_state_path):
         page = context.new_page()
         page.goto("https://www.dogcatstar.com")
 
-        if LOGIN_METHOD == "google":
+        login_method = os.getenv("LOGIN_METHOD", "google")
+        if login_method == "google":
             credentials = {
                 'email': os.getenv("GOOGLE_EMAIL"),
                 'password': os.getenv("GOOGLE_PASSWORD")
             }
-        elif LOGIN_METHOD == "facebook":
+        elif login_method == "facebook":
             credentials = {
                 'username': os.getenv("FB_USERNAME"),
                 'password': os.getenv("FB_PASSWORD")
             }
         else:
-            raise ValueError(f"不支持的登录方式: {LOGIN_METHOD}")
+            raise ValueError(f"不支持的登录方式: {login_method}")
 
-        print(f"执行登录:{LOGIN_METHOD}")
-        perform_login(page, method=LOGIN_METHOD, credentials=credentials)
+        perform_login(page, method=login_method, credentials=credentials)
 
-        # 等待登录成功（可根据实际情况调整等待条件）
+        # 等待登录成功（可根据实际情况调整）
         page.wait_for_url("**www.dogcatstar.com**", timeout=15000)
-        print("登录成功，写入auth.file")
-        context.storage_state(path=AUTH_FILE)
+        print(f"登录成功，写入认证文件: {storage_state_path}")
+        context.storage_state(path=storage_state_path)
+        page.close()  # 关闭临时页面
 
-    # 如果登录状态下也需要添加存储脚本（且之前未添加），则添加
-    if os.path.exists(AUTH_FILE) and init_script:
-        context.add_init_script(init_script)
-
-    # 从最终使用的context创建新页面并返回
+    # 最后从 context 创建一个新页面供测试使用
     page = context.new_page()
     yield page
     context.close()
 
-# @pytest.fixture(scope="function")
-# def logged_in_page(browser: Browser, request):
-#     """
-#     返回一个已登录且注入了存储预设的页面对象。
-#     该 fixture 会：
-#     1. 根据是否存在 auth 文件决定是否登录。
-#     2. 应用通过 parametrize 传入的 localStorage/sessionStorage 预设。
-#     3. 返回一个 Page 实例，可直接用于页面对象。
-#     """
-#     # 1. 处理存储预设参数
-#     storage_preset = getattr(request, 'param', {})
-#     ls_preset = storage_preset.get('localStorage', {})
-#     ss_preset = storage_preset.get('sessionStorage', {})
-#     context = browser.new_context(viewport={'width': 1366, 'height': 768})
-#
-#     # 3. 在上下文上应用存储预设脚本（无论是否加载了登录状态）
-#     script_lines = []
-#     for key, value in ls_preset.items():
-#         if isinstance(value, (dict, list)):
-#             value = json.dumps(value, ensure_ascii=False)
-#         script_lines.append(f"localStorage.setItem('{key}', '{value}');")
-#     for key, value in ss_preset.items():
-#         if isinstance(value, (dict, list)):
-#             value = json.dumps(value, ensure_ascii=False)
-#         script_lines.append(f"sessionStorage.setItem('{key}', '{value}');")
-#
-#     if script_lines:
-#         context.add_init_script("\n".join(script_lines))
-#
-#     # 2. 创建上下文（可能加载登录状态）
-#     if os.path.exists(AUTH_FILE):
-#         print("auth_file存在")
-#         context = browser.new_context(
-#             storage_state=AUTH_FILE,
-#             viewport={'width': 1366, 'height': 768}
-#         )
-#         page = context.new_page()
-#     else:
-#         # 无登录状态时，先创建空上下文
-#         print("无登录状态")
-#         context = browser.new_context(viewport={'width': 1366, 'height': 768})
-#
-#
-#         page = context.new_page()
-#         # page.goto("https://www.dogcatstar.com")
-#
-#         # 执行登录
-#         if LOGIN_METHOD == "google":
-#
-#             credentials = {
-#                 'email': os.getenv("GOOGLE_EMAIL"),
-#                 'password': os.getenv("GOOGLE_PASSWORD")
-#             }
-#         elif LOGIN_METHOD == "facebook":
-#             credentials = {
-#                 'username': os.getenv("FB_USERNAME"),
-#                 'password': os.getenv("FB_PASSWORD")
-#             }
-#         else:
-#             raise ValueError(f"不支持的登录方式: {LOGIN_METHOD}")
-#
-#         print(f"执行登录:{LOGIN_METHOD}")
-#
-#         perform_login(page, method=LOGIN_METHOD, credentials=credentials)
-#
-#         print("登录成功，写入auth.file")
-#
-#         context.storage_state(path=AUTH_FILE)
-#
-#     yield page
-#
-#     context.close()
-
-
 
 @pytest.fixture(scope="function")
 def logined_base_page(logged_in_page):
-    """公共操作类实例"""
+    """basepage页面实例化"""
     return BasePage(logged_in_page)
 
 
@@ -399,7 +437,7 @@ def logined_common_actions(logged_in_page) -> CommonActions:
 
 @pytest.fixture(scope="function")
 def logined_main_page(logged_in_page) -> MainPage:
-    """主页面实例"""
+    """主页面实例化"""
     return MainPage(logged_in_page)
 
 
@@ -443,4 +481,28 @@ def logined_close_today_not_show(logged_in_page):
     if locator.count() > 0 and locator.first.is_visible():
         locator.first.click()
         logged_in_page.wait_for_timeout(300)
+
+
+@pytest.fixture(scope="function")
+def take_screenshot(page):
+    """截图辅助函数"""
+    def _screenshot(name="screenshot"):
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        path = f"screenshots/{name}_{timestamp}.png"
+        os.makedirs("screenshots", exist_ok=True)
+        page.screenshot(path=path, full_page=True)
+        print(f"Screenshot saved: {path}")
+    return _screenshot
+
+def pytest_addoption(parser):
+    """添加命令行选项，用于指定登录状态文件"""
+    parser.addoption(
+        "--storage-state",
+        action="store",
+        default=None,  # 默认为 None，让 fixture 使用动态文件名
+        help="Path to storage state file (default: auth_{LOGIN_METHOD}.json)"
+    )
+
+
+
 

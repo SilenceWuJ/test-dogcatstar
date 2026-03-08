@@ -13,7 +13,10 @@ import time
 from typing import List, Optional, Dict
 from playwright.sync_api import Page
 from ui.pages.base_page import BasePage
+
 from utils.log import logger
+from typing import Optional, Callable, Type
+from ui.pages.product_detail_page import ProductDetailPage
 
 
 class ProductListPage(BasePage):
@@ -834,3 +837,29 @@ class ProductListPage(BasePage):
 
         logger.error(f"经过 {max_retries} 次尝试后，仍未出现购物车弹窗")
         return False
+
+    # ---------- 修改点击方法 ----------
+
+
+
+    def go_to_detail(self, index: int = 0, login_callback: Optional[Callable] = None) -> ProductDetailPage:
+        """
+        点击指定商品，进入详情页，自动处理可能的登录拦截
+        :param index: 商品索引（从0开始）
+        :param login_callback: 遇到登录页时调用的登录函数
+        :return: ProductDetailPage 实例
+        """
+        # 定位到指定商品的链接（根据实际结构调整）
+        # 假设每个商品卡片内都有一个链接指向详情页
+        product_link_selector = f"{self.PRODUCT_CARDS}:nth-child({index+1}) a"
+        final_page = self.click_and_handle_navigation(product_link_selector)
+
+        # 创建详情页对象
+        detail_page = ProductDetailPage(final_page)
+
+        # 如果遇到登录页，处理登录
+        detail_page.handle_login_if_needed(login_callback)
+
+        # 等待详情页关键元素出现（确认加载完成）
+        detail_page.wait_for_element(detail_page.PRODUCT_TITLE, timeout=15000)
+        return detail_page
