@@ -1,4 +1,4 @@
-# DogCatStar 自动化测试项目
+# 自动化测试项目
 
 基于 `pytest` + `Playwright` 的 UI 自动化测试框架，用于测试汪喵星球（dogcatstar.com）网站的会员登录、商品加购等核心业务流程。
 
